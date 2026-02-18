@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { Starfield } from '../objects/Starfield';
-import { signInWithGoogle, signInWithApple } from '../lib/auth';
+import { signInWithGoogle } from '../lib/auth';
 import type { PendingAuthState } from '../lib/auth';
 
 interface LoginSceneData {
@@ -67,34 +67,18 @@ export class LoginScene extends Phaser.Scene {
       score: this.sceneData.score,
     };
 
-    const googleBtn = makeButton(310, 'Sign in with Google', 0x4285f4, '#ffffff', () => {
+    const googleBtn = makeButton(340, 'Sign in with Google', 0x4285f4, '#ffffff', () => {
       googleBtn.bg.disableInteractive();
-      appleBtn.bg.disableInteractive();
       statusText.setText('Redirecting to sign in…').setColor('#aaaaaa');
       signInWithGoogle(pendingState).catch((err) => {
         console.error(err);
         googleBtn.bg.setInteractive({ useHandCursor: true });
-        appleBtn.bg.setInteractive({ useHandCursor: true });
         statusText.setText('Sign in failed — try again').setColor('#ff4444');
       });
     });
-
-    const appleBtn = makeButton(380, 'Sign in with Apple', 0x000000, '#ffffff', () => {
-      googleBtn.bg.disableInteractive();
-      appleBtn.bg.disableInteractive();
-      statusText.setText('Redirecting to sign in…').setColor('#aaaaaa');
-      signInWithApple(pendingState).catch((err) => {
-        console.error(err);
-        googleBtn.bg.setInteractive({ useHandCursor: true });
-        appleBtn.bg.setInteractive({ useHandCursor: true });
-        statusText.setText('Sign in failed — try again').setColor('#ff4444');
-      });
-    });
-    // Add white border for Apple button visibility
-    this.add.rectangle(240, 380, 280, 52).setStrokeStyle(1, 0xffffff).setDepth(2);
 
     if (this.sceneData.returnTo === 'leaderboard') {
-      makeButton(450, 'Continue as Guest', 0x555555, '#cccccc', () => {
+      makeButton(420, 'Continue as Guest', 0x555555, '#cccccc', () => {
         this.scene.start('LeaderboardScene');
       });
     }

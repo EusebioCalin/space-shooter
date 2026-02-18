@@ -36,14 +36,6 @@ export async function signInWithGoogle(state: PendingAuthState): Promise<void> {
   });
 }
 
-export async function signInWithApple(state: PendingAuthState): Promise<void> {
-  savePendingAuthState(state);
-  await supabase.auth.signInWithOAuth({
-    provider: 'apple',
-    options: { redirectTo: window.location.origin },
-  });
-}
-
 export async function signOut(): Promise<void> {
   await supabase.auth.signOut();
 }

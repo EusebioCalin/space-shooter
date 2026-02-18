@@ -29,6 +29,10 @@ export class GameScene extends Phaser.Scene {
   private elapsed = 0;
   private invincible = false;
   private gameOver = false;
+  private paused = false;
+  private pauseOverlay: Phaser.GameObjects.GameObject[] = [];
+  private pauseBtn!: Phaser.GameObjects.Rectangle;
+  private pauseBtnText!: Phaser.GameObjects.Text;
 
   constructor() {
     super({ key: 'GameScene' });
@@ -43,6 +47,8 @@ export class GameScene extends Phaser.Scene {
     this.elapsed = 0;
     this.invincible = false;
     this.gameOver = false;
+    this.paused = false;
+    this.pauseOverlay = [];
     this.enemySpawnTimer = 0;
     this.enemySpawnInterval = 8000;
 
@@ -122,17 +128,29 @@ export class GameScene extends Phaser.Scene {
       fontFamily: 'monospace',
     }).setOrigin(1, 0).setDepth(100).setScrollFactor(0);
 
+    // Pause button
+    this.pauseBtn = this.add.rectangle(240, 20, 44, 26, 0x222222, 0.7)
+      .setDepth(100).setScrollFactor(0).setInteractive({ useHandCursor: true });
+    this.pauseBtnText = this.add.text(240, 20, 'II', {
+      fontSize: '14px',
+      color: '#ffffff',
+      fontFamily: 'monospace',
+    }).setOrigin(0.5).setDepth(100).setScrollFactor(0);
+    this.pauseBtn.on('pointerdown', () => this.showPauseMenu());
+
     // Touch input
     this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
-      if (!this.gameOver) this.ship.handleInput(pointer);
+      if (this.paused || this.gameOver) return;
+      this.ship.handleInput(pointer);
     });
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
-      if (!this.gameOver) this.ship.handleInput(pointer);
+      if (this.paused || this.gameOver) return;
+      this.ship.handleInput(pointer);
     });
   }
 
   update(_time: number, delta: number): void {
-    if (this.gameOver) return;
+    if (this.paused || this.gameOver) return;
 
     this.starfield.update(delta);
     this.elapsed += delta;
@@ -372,10 +390,58 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  private showPauseMenu(): void {
+    this.paused = true;
+
+    const dim = this.add.rectangle(240, 400, 480, 800, 0x000000, 0.72)
+      .setDepth(150).setScrollFactor(0);
+
+    const title = this.add.text(240, 310, 'PAUSED', {
+      fontSize: '32px',
+      color: '#00ffff',
+      fontFamily: 'monospace',
+      fontStyle: 'bold',
+    }).setOrigin(0.5).setDepth(151).setScrollFactor(0);
+
+    const resumeBg = this.add.rectangle(240, 410, 220, 54, 0x1a6b1a)
+      .setDepth(151).setScrollFactor(0).setInteractive({ useHandCursor: true });
+    const resumeText = this.add.text(240, 410, 'Resume', {
+      fontSize: '18px',
+      color: '#ffffff',
+      fontFamily: 'monospace',
+    }).setOrigin(0.5).setDepth(152).setScrollFactor(0);
+
+    const quitBg = this.add.rectangle(240, 490, 220, 54, 0x444444)
+      .setDepth(151).setScrollFactor(0).setInteractive({ useHandCursor: true });
+    const quitText = this.add.text(240, 490, 'Quit to Menu', {
+      fontSize: '18px',
+      color: '#ffffff',
+      fontFamily: 'monospace',
+    }).setOrigin(0.5).setDepth(152).setScrollFactor(0);
+
+    resumeBg.on('pointerdown', () => this.hidePauseMenu());
+    resumeBg.on('pointerover', () => resumeBg.setAlpha(0.75));
+    resumeBg.on('pointerout', () => resumeBg.setAlpha(1));
+
+    quitBg.on('pointerdown', () => this.scene.start('MenuScene'));
+    quitBg.on('pointerover', () => quitBg.setAlpha(0.75));
+    quitBg.on('pointerout', () => quitBg.setAlpha(1));
+
+    this.pauseOverlay = [dim, title, resumeBg, resumeText, quitBg, quitText];
+  }
+
+  private hidePauseMenu(): void {
+    this.paused = false;
+    this.pauseOverlay.forEach(obj => obj.destroy());
+    this.pauseOverlay = [];
+  }
+
   private showGameOver(): void {
     this.gameOver = true;
     this.ship.setVisible(false);
     this.ship.setActive(false);
+    this.pauseBtn.setVisible(false);
+    this.pauseBtnText.setVisible(false);
 
     // Darken overlay
     const overlay = this.add.rectangle(240, 400, 480, 800, 0x000000, 0.6);

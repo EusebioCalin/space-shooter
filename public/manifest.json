@@ -1,0 +1,13 @@
+{
+  "name": "Space Madness",
+  "short_name": "SpaceMadness",
+  "description": "Shoot asteroids and enemy ships. Climb the leaderboard.",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#000000",
+  "theme_color": "#00ccff",
+  "icons": [
+    { "src": "/icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

@@ -33,6 +33,11 @@ export class BootScene extends Phaser.Scene {
     const session = await getSession();
 
     if (pendingState && session) {
+      const hasUsername = !!session.user.user_metadata?.custom_username;
+      if (!hasUsername) {
+        this.scene.start('UsernameScene', { pendingState });
+        return;
+      }
       if (pendingState.returnTo === 'game-over' && pendingState.score !== undefined) {
         try {
           await saveScore(pendingState.score);

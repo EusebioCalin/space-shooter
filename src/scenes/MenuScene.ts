@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { Starfield } from '../objects/Starfield';
-import { getSession, signOut } from '../lib/auth';
+import { getSession, signOut, getUsernameFromMetadata } from '../lib/auth';
 import type { Session } from '@supabase/supabase-js';
 
 export class MenuScene extends Phaser.Scene {
@@ -59,32 +59,46 @@ export class MenuScene extends Phaser.Scene {
     // Load session to show auth state
     getSession().then((session: Session | null) => {
       if (session) {
-        const username =
-          (session.user.user_metadata?.full_name as string | undefined) ||
-          session.user.email?.split('@')[0] ||
-          'Player';
+        const username = getUsernameFromMetadata(session.user);
+        const hasCustomUsername = !!session.user.user_metadata?.custom_username;
 
-        // Username indicator top-right
-        this.add.text(464, 16, `\u{1F464} ${username}`, {
-          fontSize: '14px',
-          color: '#aaffaa',
-          fontFamily: 'monospace',
-        }).setOrigin(1, 0).setDepth(10);
+        if (hasCustomUsername) {
+          // Username top-LEFT, tappable to edit
+          const usernameText = this.add.text(0, 0, `\u{1F464} ${username}`, {
+            fontSize: '14px',
+            color: '#aaffaa',
+            fontFamily: 'monospace',
+            backgroundColor: 'rgba(26, 107, 26, 0.8)',
+            padding: { left: 8, right: 8, top: 4, bottom: 4 },
+          }).setOrigin(0, 0).setDepth(10).setInteractive({ useHandCursor: true });
+          usernameText.on('pointerdown', () => this.scene.start('UsernameScene', {}));
+        } else {
+          // No custom username yet — "Set Username" top-LEFT
+          const setUsernameBg = this.add
+            .rectangle(62, 14, 110, 26, 0x1a4d1a)
+            .setDepth(10)
+            .setInteractive({ useHandCursor: true });
+          this.add.text(62, 14, 'Set Username', {
+            fontSize: '13px',
+            color: '#88ff88',
+            fontFamily: 'monospace',
+          }).setOrigin(0.5).setDepth(11);
+          setUsernameBg.on('pointerdown', () => this.scene.start('UsernameScene', {}));
+          setUsernameBg.on('pointerover', () => setUsernameBg.setAlpha(0.8));
+          setUsernameBg.on('pointerout', () => setUsernameBg.setAlpha(1));
+        }
 
-        // Sign Out button
+        // Sign Out — top-RIGHT, away from username
         const signOutBg = this.add
-          .rectangle(430, 50, 100, 28, 0x330000)
+          .rectangle(440, 14, 88, 26, 0x330000)
           .setDepth(10)
           .setInteractive({ useHandCursor: true });
-        this.add.text(430, 50, 'Sign Out', {
+        this.add.text(440, 14, 'Sign Out', {
           fontSize: '13px',
           color: '#ff8888',
           fontFamily: 'monospace',
         }).setOrigin(0.5).setDepth(11);
-        signOutBg.on('pointerdown', async () => {
-          await signOut();
-          this.scene.restart();
-        });
+        signOutBg.on('pointerdown', async () => { await signOut(); this.scene.restart(); });
         signOutBg.on('pointerover', () => signOutBg.setAlpha(0.8));
         signOutBg.on('pointerout', () => signOutBg.setAlpha(1));
       }

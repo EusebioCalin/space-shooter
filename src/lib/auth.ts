@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import type { Session } from '@supabase/supabase-js';
+import type { Session, User } from '@supabase/supabase-js';
 
 export interface PendingAuthState {
   returnTo: 'leaderboard' | 'game-over';
@@ -21,6 +21,20 @@ export function consumePendingAuthState(): PendingAuthState | null {
   } catch {
     return null;
   }
+}
+
+export function getUsernameFromMetadata(user: User): string {
+  return (
+    (user.user_metadata?.custom_username as string | undefined) ||
+    (user.user_metadata?.full_name as string | undefined) ||
+    user.email?.split('@')[0] ||
+    'Player'
+  );
+}
+
+export async function setCustomUsername(username: string): Promise<void> {
+  const { error } = await supabase.auth.updateUser({ data: { custom_username: username } });
+  if (error) throw error;
 }
 
 export async function getSession(): Promise<Session | null> {
@@ -45,10 +59,7 @@ export async function saveScore(score: number): Promise<void> {
   if (!session) throw new Error('Not authenticated');
 
   const user = session.user;
-  const username =
-    (user.user_metadata?.full_name as string | undefined) ||
-    user.email?.split('@')[0] ||
-    'Player';
+  const username = getUsernameFromMetadata(user);
 
   const { error } = await supabase.from('leaderboard').insert({
     user_id: user.id,

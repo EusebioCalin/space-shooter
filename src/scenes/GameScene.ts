@@ -499,9 +499,23 @@ export class GameScene extends Phaser.Scene {
       }
     });
 
-    const restartText = this.add.text(240, 500, 'Tap to Restart', {
-      fontSize: '20px',
-      color: '#ffffff',
+    // Main Menu button
+    const menuBg = this.add
+      .rectangle(240, 500, 200, 46, 0x333333)
+      .setDepth(100)
+      .setInteractive({ useHandCursor: true });
+    this.add.text(240, 500, 'Main Menu', {
+      fontSize: '18px',
+      color: '#cccccc',
+      fontFamily: 'monospace',
+    }).setOrigin(0.5).setDepth(101);
+    menuBg.on('pointerdown', () => this.scene.start('MenuScene'));
+    menuBg.on('pointerover', () => menuBg.setAlpha(0.8));
+    menuBg.on('pointerout', () => menuBg.setAlpha(1));
+
+    const restartText = this.add.text(240, 570, 'Tap anywhere to restart', {
+      fontSize: '17px',
+      color: '#888888',
       fontFamily: 'monospace',
     }).setOrigin(0.5).setDepth(100);
 

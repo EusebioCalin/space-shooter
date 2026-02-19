@@ -1,5 +1,12 @@
 import Phaser from 'phaser';
 import { Bullet } from './Bullet';
+import type { ShipType } from '../utils/ShipPreference';
+
+const SHIP_TEXTURE: Record<ShipType, string> = {
+  xwing: 'ship_xwing',
+  awing: 'ship_awing',
+  ywing: 'ship_ywing',
+};
 
 export class Ship extends Phaser.Physics.Arcade.Sprite {
   private targetX: number;
@@ -8,8 +15,8 @@ export class Ship extends Phaser.Physics.Arcade.Sprite {
   private thrusterEmitter: Phaser.GameObjects.Particles.ParticleEmitter;
   bullets: Phaser.Physics.Arcade.Group;
 
-  constructor(scene: Phaser.Scene) {
-    super(scene, 240, 720, 'ship');
+  constructor(scene: Phaser.Scene, shipType: ShipType) {
+    super(scene, 240, 720, SHIP_TEXTURE[shipType]);
     scene.add.existing(this);
     scene.physics.add.existing(this);
 

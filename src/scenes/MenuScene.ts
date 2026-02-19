@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { Starfield } from '../objects/Starfield';
 import { getSession, signOut, getUsernameFromMetadata } from '../lib/auth';
+import { loadShipPreference } from '../utils/ShipPreference';
 import type { Session } from '@supabase/supabase-js';
 
 export class MenuScene extends Phaser.Scene {
@@ -59,21 +60,20 @@ export class MenuScene extends Phaser.Scene {
     // Load session to show auth state
     getSession().then((session: Session | null) => {
       if (session) {
+        loadShipPreference(); // sync DB → localStorage before game starts
         const username = getUsernameFromMetadata(session.user);
         const hasCustomUsername = !!session.user.user_metadata?.custom_username;
 
         if (hasCustomUsername) {
-          // Username top-LEFT, tappable to edit
-          const usernameText = this.add.text(0, 0, `\u{1F464} ${username}`, {
+          // Username top-LEFT, tappable → ProfileScene
+          const usernameText = this.add.text(16, 14, `\u{1F464} ${username}`, {
             fontSize: '14px',
             color: '#aaffaa',
             fontFamily: 'monospace',
-            backgroundColor: 'rgba(26, 107, 26, 0.8)',
-            padding: { left: 8, right: 8, top: 4, bottom: 4 },
           }).setOrigin(0, 0).setDepth(10).setInteractive({ useHandCursor: true });
-          usernameText.on('pointerdown', () => this.scene.start('UsernameScene', {}));
+          usernameText.on('pointerdown', () => this.scene.start('ProfileScene'));
         } else {
-          // No custom username yet — "Set Username" top-LEFT
+          // No custom username yet — "Set Username" top-LEFT → ProfileScene
           const setUsernameBg = this.add
             .rectangle(62, 14, 110, 26, 0x1a4d1a)
             .setDepth(10)
@@ -83,7 +83,7 @@ export class MenuScene extends Phaser.Scene {
             color: '#88ff88',
             fontFamily: 'monospace',
           }).setOrigin(0.5).setDepth(11);
-          setUsernameBg.on('pointerdown', () => this.scene.start('UsernameScene', {}));
+          setUsernameBg.on('pointerdown', () => this.scene.start('ProfileScene'));
           setUsernameBg.on('pointerover', () => setUsernameBg.setAlpha(0.8));
           setUsernameBg.on('pointerout', () => setUsernameBg.setAlpha(1));
         }

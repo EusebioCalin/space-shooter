@@ -8,6 +8,7 @@ import { EnemyBullet } from '../objects/EnemyBullet';
 import { Starfield } from '../objects/Starfield';
 import { screenShake } from '../utils/ScreenShake';
 import { getSession, saveScore } from '../lib/auth';
+import { getSelectedShip } from '../utils/ShipPreference';
 
 export class GameScene extends Phaser.Scene {
   private ship!: Ship;
@@ -53,7 +54,7 @@ export class GameScene extends Phaser.Scene {
     this.enemySpawnInterval = 8000;
 
     this.starfield = new Starfield(this);
-    this.ship = new Ship(this);
+    this.ship = new Ship(this, getSelectedShip());
 
     this.asteroids = this.physics.add.group({
       classType: Asteroid,
@@ -189,7 +190,15 @@ export class GameScene extends Phaser.Scene {
 
   private spawnEnemy(): void {
     const x = Phaser.Math.Between(40, 440);
-    const type: EnemyType = Math.random() < 0.7 ? 'scout' : 'gunship';
+    const roll = Math.random();
+    let type: EnemyType;
+    if (this.elapsed > 30000 && roll < 0.05) {
+      type = 'destroyer';
+    } else if (roll < 0.30) {
+      type = 'gunship';
+    } else {
+      type = 'scout';
+    }
     const enemy = new EnemyShip(this, x, -50, type, this.enemyBullets);
     this.enemies.add(enemy);
     enemy.launch();

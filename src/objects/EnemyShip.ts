@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { EnemyBullet } from './EnemyBullet';
 
-export type EnemyType = 'scout' | 'gunship';
+export type EnemyType = 'scout' | 'gunship' | 'destroyer';
 
 const ENEMY_CONFIG: Record<EnemyType, {
   texture: string;
@@ -13,9 +13,11 @@ const ENEMY_CONFIG: Record<EnemyType, {
   fireRate: number;
   bulletSpread: number;
   scale: number;
+  burstCount: number;
 }> = {
-  scout: { texture: 'enemy_scout', hp: 2, score: 50, speedY: 120, driftAmplitude: 100, driftFrequency: 0.6, fireRate: 2500, bulletSpread: 70, scale: 1.1 },
-  gunship: { texture: 'enemy_gunship', hp: 5, score: 150, speedY: 75, driftAmplitude: 30, driftFrequency: 0.7, fireRate: 1200, bulletSpread: 30, scale: 1.0 },
+  scout:     { texture: 'enemy_scout',     hp: 2,  score: 50,  speedY: 120, driftAmplitude: 100, driftFrequency: 0.6, fireRate: 2500, bulletSpread: 70, scale: 1.1, burstCount: 1 },
+  gunship:   { texture: 'enemy_gunship',   hp: 5,  score: 150, speedY: 75,  driftAmplitude: 30,  driftFrequency: 0.7, fireRate: 1200, bulletSpread: 30, scale: 1.0, burstCount: 1 },
+  destroyer: { texture: 'enemy_destroyer', hp: 12, score: 400, speedY: 45,  driftAmplitude: 15,  driftFrequency: 0.3, fireRate: 1800, bulletSpread: 20, scale: 1.3, burstCount: 3 },
 };
 
 export class EnemyShip extends Phaser.Physics.Arcade.Sprite {
@@ -63,10 +65,15 @@ export class EnemyShip extends Phaser.Physics.Arcade.Sprite {
   }
 
   private fire(): void {
-    const spread = Phaser.Math.Between(-this.cfg.bulletSpread, this.cfg.bulletSpread);
-    const bullet = new EnemyBullet(this.scene, this.x, this.y + 10);
-    this.enemyBullets.add(bullet);
-    bullet.launch(spread);
+    const count = this.cfg.burstCount;
+    for (let i = 0; i < count; i++) {
+      const spread = count === 1
+        ? Phaser.Math.Between(-this.cfg.bulletSpread, this.cfg.bulletSpread)
+        : Phaser.Math.Linear(-this.cfg.bulletSpread, this.cfg.bulletSpread, i / (count - 1));
+      const bullet = new EnemyBullet(this.scene, this.x, this.y + 10);
+      this.enemyBullets.add(bullet);
+      bullet.launch(spread);
+    }
   }
 
   preUpdate(time: number, delta: number): void {
@@ -84,13 +91,11 @@ export class EnemyShip extends Phaser.Physics.Arcade.Sprite {
       460
     );
 
-    // Fire when timer exceeds fire rate
     if (this.fireTimer >= this.cfg.fireRate) {
       this.fireTimer = 0;
       this.fire();
     }
 
-    // Cleanup
     if (this.y > 850) {
       this.destroy();
     }

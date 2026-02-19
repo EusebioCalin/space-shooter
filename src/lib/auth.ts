@@ -61,11 +61,18 @@ export async function saveScore(score: number): Promise<void> {
   const user = session.user;
   const username = getUsernameFromMetadata(user);
 
-  const { error } = await supabase.from('leaderboard').insert({
-    user_id: user.id,
-    username,
-    score,
-  });
+  // Only keep the user's personal best
+  const { data: existing } = await supabase
+    .from('leaderboard')
+    .select('score')
+    .eq('user_id', user.id)
+    .maybeSingle();
+
+  if (existing && score <= existing.score) return;
+
+  const { error } = await supabase
+    .from('leaderboard')
+    .upsert({ user_id: user.id, username, score }, { onConflict: 'user_id' });
   if (error) throw error;
 }
 

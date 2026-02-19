@@ -5,6 +5,7 @@ import { LoginScene } from './scenes/LoginScene';
 import { LeaderboardScene } from './scenes/LeaderboardScene';
 import { GameScene } from './scenes/GameScene';
 import { UsernameScene } from './scenes/UsernameScene';
+import { ProfileScene } from './scenes/ProfileScene';
 
 const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
@@ -23,7 +24,7 @@ const config: Phaser.Types.Core.GameConfig = {
       debug: false,
     },
   },
-  scene: [BootScene, MenuScene, LoginScene, LeaderboardScene, GameScene, UsernameScene],
+  scene: [BootScene, MenuScene, LoginScene, LeaderboardScene, GameScene, UsernameScene, ProfileScene],
   input: {
     activePointers: 2,
   },

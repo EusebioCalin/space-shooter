@@ -50,7 +50,7 @@ export async function saveScore(score: number): Promise<void> {
     user.email?.split('@')[0] ||
     'Player';
 
-  const { error } = await supabase.from('scores').insert({
+  const { error } = await supabase.from('leaderboard').insert({
     user_id: user.id,
     username,
     score,

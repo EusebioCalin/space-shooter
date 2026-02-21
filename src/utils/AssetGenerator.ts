@@ -13,6 +13,7 @@ export function generateAssets(scene: Phaser.Scene): void {
   generateEnemyTIEFighter(scene);
   generateEnemyTIEBomber(scene);
   generateEnemyDestroyer(scene);
+  generateHeartPickup(scene);
 }
 
 // ─── Player Ships ─────────────────────────────────────────────────────────────
@@ -305,6 +306,29 @@ function generateEnemyTIEBomber(scene: Phaser.Scene): void {
   g.fillRect(8, 20, 8, 3);
 
   g.generateTexture('enemy_gunship', 44, 26);
+  g.destroy();
+}
+
+function generateHeartPickup(scene: Phaser.Scene): void {
+  const g = scene.add.graphics();
+
+  // Main red body
+  g.fillStyle(0xff3355);
+  g.fillRect(1, 0, 4, 2);   // left bump
+  g.fillRect(9, 0, 4, 2);   // right bump
+  g.fillRect(0, 2, 14, 4);  // connecting row (full width)
+  g.fillRect(0, 6, 14, 2);
+  g.fillRect(1, 8, 12, 2);
+  g.fillRect(3, 10, 8, 2);
+  g.fillRect(5, 12, 4, 2);
+
+  // Pink highlight (top-left of each bump)
+  g.fillStyle(0xff88aa);
+  g.fillRect(2, 0, 2, 2);
+  g.fillRect(10, 0, 2, 2);
+  g.fillRect(1, 2, 3, 2);
+
+  g.generateTexture('heart_pickup', 14, 14);
   g.destroy();
 }
 

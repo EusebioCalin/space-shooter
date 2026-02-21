@@ -1,14 +1,20 @@
-import Phaser from 'phaser';
-import { Ship } from '../objects/Ship';
-import { Asteroid } from '../objects/Asteroid';
-import type { AsteroidSize } from '../objects/Asteroid';
-import { EnemyShip } from '../objects/EnemyShip';
-import type { EnemyType } from '../objects/EnemyShip';
-import { EnemyBullet } from '../objects/EnemyBullet';
-import { Starfield } from '../objects/Starfield';
-import { screenShake } from '../utils/ScreenShake';
-import { getSession, saveScore } from '../lib/auth';
-import { getSelectedShip } from '../utils/ShipPreference';
+import Phaser from "phaser";
+import { Ship } from "../objects/Ship";
+import { Asteroid } from "../objects/Asteroid";
+import type { AsteroidSize } from "../objects/Asteroid";
+import { EnemyShip } from "../objects/EnemyShip";
+import type { EnemyType } from "../objects/EnemyShip";
+import { EnemyBullet } from "../objects/EnemyBullet";
+import { Starfield } from "../objects/Starfield";
+import { HeartPickup } from "../objects/HeartPickup";
+import { screenShake } from "../utils/ScreenShake";
+import {
+  abandonGameSession,
+  getSession,
+  saveScore,
+  startGameSession,
+} from "../lib/auth";
+import { getSelectedShip } from "../utils/ShipPreference";
 
 export class GameScene extends Phaser.Scene {
   private ship!: Ship;
@@ -22,6 +28,7 @@ export class GameScene extends Phaser.Scene {
 
   private enemies!: Phaser.Physics.Arcade.Group;
   private enemyBullets!: Phaser.Physics.Arcade.Group;
+  private heartPickups!: Phaser.Physics.Arcade.Group;
   private enemySpawnTimer = 0;
   private enemySpawnInterval = 8000;
 
@@ -35,8 +42,11 @@ export class GameScene extends Phaser.Scene {
   private pauseBtn!: Phaser.GameObjects.Rectangle;
   private pauseBtnText!: Phaser.GameObjects.Text;
 
+  private sessionId = "";
+  private sessionToken = "";
+
   constructor() {
-    super({ key: 'GameScene' });
+    super({ key: "GameScene" });
   }
 
   create(): void {
@@ -52,6 +62,15 @@ export class GameScene extends Phaser.Scene {
     this.pauseOverlay = [];
     this.enemySpawnTimer = 0;
     this.enemySpawnInterval = 8000;
+
+    this.sessionId = "";
+    this.sessionToken = "";
+    startGameSession()
+      .then(({ sessionId, sessionToken }) => {
+        this.sessionId = sessionId;
+        this.sessionToken = sessionToken;
+      })
+      .catch(() => console.warn("Failed to start game session"));
 
     this.starfield = new Starfield(this);
     this.ship = new Ship(this, getSelectedShip());
@@ -75,36 +94,40 @@ export class GameScene extends Phaser.Scene {
     this.physics.add.overlap(
       this.ship.bullets,
       this.asteroids,
-      this.onBulletHitAsteroid as Phaser.Types.Physics.Arcade.ArcadePhysicsCallback,
-      undefined,
       this
+        .onBulletHitAsteroid as Phaser.Types.Physics.Arcade.ArcadePhysicsCallback,
+      undefined,
+      this,
     );
 
     // Ship-asteroid collision
     this.physics.add.overlap(
       this.ship,
       this.asteroids,
-      this.onShipHitAsteroid as Phaser.Types.Physics.Arcade.ArcadePhysicsCallback,
-      undefined,
       this
+        .onShipHitAsteroid as Phaser.Types.Physics.Arcade.ArcadePhysicsCallback,
+      undefined,
+      this,
     );
 
     // Bullet-enemy collision
     this.physics.add.overlap(
       this.ship.bullets,
       this.enemies,
-      this.onBulletHitEnemy as Phaser.Types.Physics.Arcade.ArcadePhysicsCallback,
-      undefined,
       this
+        .onBulletHitEnemy as Phaser.Types.Physics.Arcade.ArcadePhysicsCallback,
+      undefined,
+      this,
     );
 
     // Enemy bullet-ship collision
     this.physics.add.overlap(
       this.ship,
       this.enemyBullets,
-      this.onEnemyBulletHitShip as Phaser.Types.Physics.Arcade.ArcadePhysicsCallback,
-      undefined,
       this
+        .onEnemyBulletHitShip as Phaser.Types.Physics.Arcade.ArcadePhysicsCallback,
+      undefined,
+      this,
     );
 
     // Ship-enemy collision
@@ -113,38 +136,66 @@ export class GameScene extends Phaser.Scene {
       this.enemies,
       this.onShipHitEnemy as Phaser.Types.Physics.Arcade.ArcadePhysicsCallback,
       undefined,
+      this,
+    );
+
+    this.heartPickups = this.physics.add.group({
+      classType: HeartPickup,
+      runChildUpdate: true,
+    });
+
+    this.physics.add.overlap(
+      this.ship,
+      this.heartPickups,
       this
+        .onShipCollectHeart as Phaser.Types.Physics.Arcade.ArcadePhysicsCallback,
+      undefined,
+      this,
     );
 
     // HUD
-    this.scoreText = this.add.text(16, 16, 'Score: 0', {
-      fontSize: '18px',
-      color: '#ffffff',
-      fontFamily: 'monospace',
-    }).setDepth(100).setScrollFactor(0);
+    this.scoreText = this.add
+      .text(16, 16, "Score: 0", {
+        fontSize: "18px",
+        color: "#ffffff",
+        fontFamily: "monospace",
+      })
+      .setDepth(100)
+      .setScrollFactor(0);
 
-    this.livesText = this.add.text(464, 16, 'Lives: 3', {
-      fontSize: '18px',
-      color: '#ff4444',
-      fontFamily: 'monospace',
-    }).setOrigin(1, 0).setDepth(100).setScrollFactor(0);
+    this.livesText = this.add
+      .text(464, 16, "Lives: 3", {
+        fontSize: "18px",
+        color: "#ff4444",
+        fontFamily: "monospace",
+      })
+      .setOrigin(1, 0)
+      .setDepth(100)
+      .setScrollFactor(0);
 
     // Pause button
-    this.pauseBtn = this.add.rectangle(240, 20, 44, 26, 0x222222, 0.7)
-      .setDepth(100).setScrollFactor(0).setInteractive({ useHandCursor: true });
-    this.pauseBtnText = this.add.text(240, 20, 'II', {
-      fontSize: '14px',
-      color: '#ffffff',
-      fontFamily: 'monospace',
-    }).setOrigin(0.5).setDepth(100).setScrollFactor(0);
-    this.pauseBtn.on('pointerdown', () => this.showPauseMenu());
+    this.pauseBtn = this.add
+      .rectangle(240, 20, 44, 26, 0x222222, 0.7)
+      .setDepth(100)
+      .setScrollFactor(0)
+      .setInteractive({ useHandCursor: true });
+    this.pauseBtnText = this.add
+      .text(240, 20, "II", {
+        fontSize: "14px",
+        color: "#ffffff",
+        fontFamily: "monospace",
+      })
+      .setOrigin(0.5)
+      .setDepth(100)
+      .setScrollFactor(0);
+    this.pauseBtn.on("pointerdown", () => this.showPauseMenu());
 
     // Touch input
-    this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
+    this.input.on("pointermove", (pointer: Phaser.Input.Pointer) => {
       if (this.paused || this.gameOver) return;
       this.ship.handleInput(pointer);
     });
-    this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+    this.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
       if (this.paused || this.gameOver) return;
       this.ship.handleInput(pointer);
     });
@@ -179,9 +230,9 @@ export class GameScene extends Phaser.Scene {
     const x = Phaser.Math.Between(30, 450);
     const roll = Math.random();
     let size: AsteroidSize;
-    if (roll < 0.3) size = 'large';
-    else if (roll < 0.65) size = 'medium';
-    else size = 'small';
+    if (roll < 0.3) size = "large";
+    else if (roll < 0.65) size = "medium";
+    else size = "small";
 
     const asteroid = new Asteroid(this, x, -40, size);
     this.asteroids.add(asteroid);
@@ -193,11 +244,11 @@ export class GameScene extends Phaser.Scene {
     const roll = Math.random();
     let type: EnemyType;
     if (this.elapsed > 30000 && roll < 0.05) {
-      type = 'destroyer';
-    } else if (roll < 0.30) {
-      type = 'gunship';
+      type = "destroyer";
+    } else if (roll < 0.3) {
+      type = "gunship";
     } else {
-      type = 'scout';
+      type = "scout";
     }
     const enemy = new EnemyShip(this, x, -50, type, this.enemyBullets);
     this.enemies.add(enemy);
@@ -205,8 +256,12 @@ export class GameScene extends Phaser.Scene {
   }
 
   private onBulletHitEnemy(
-    bulletObj: Phaser.Types.Physics.Arcade.GameObjectWithBody | Phaser.Tilemaps.Tile,
-    enemyObj: Phaser.Types.Physics.Arcade.GameObjectWithBody | Phaser.Tilemaps.Tile
+    bulletObj:
+      | Phaser.Types.Physics.Arcade.GameObjectWithBody
+      | Phaser.Tilemaps.Tile,
+    enemyObj:
+      | Phaser.Types.Physics.Arcade.GameObjectWithBody
+      | Phaser.Tilemaps.Tile,
   ): void {
     const bullet = bulletObj as Phaser.Physics.Arcade.Sprite;
     const enemy = enemyObj as EnemyShip;
@@ -220,23 +275,29 @@ export class GameScene extends Phaser.Scene {
       this.score += enemy.scoreValue;
       this.scoreText.setText(`Score: ${this.score}`);
 
-      this.add.particles(enemy.x, enemy.y, 'particle_explosion', {
-        speed: { min: 50, max: 200 },
-        scale: { start: 1, end: 0 },
-        alpha: { start: 1, end: 0 },
-        lifespan: 400,
-        quantity: 12,
-        tint: [0xff2222, 0xff6633, 0xffaa33],
-        emitting: false,
-      }).explode(12);
+      this.add
+        .particles(enemy.x, enemy.y, "particle_explosion", {
+          speed: { min: 50, max: 200 },
+          scale: { start: 1, end: 0 },
+          alpha: { start: 1, end: 0 },
+          lifespan: 400,
+          quantity: 12,
+          tint: [0xff2222, 0xff6633, 0xffaa33],
+          emitting: false,
+        })
+        .explode(12);
 
       enemy.destroy();
     }
   }
 
   private onEnemyBulletHitShip(
-    _shipObj: Phaser.Types.Physics.Arcade.GameObjectWithBody | Phaser.Tilemaps.Tile,
-    bulletObj: Phaser.Types.Physics.Arcade.GameObjectWithBody | Phaser.Tilemaps.Tile
+    _shipObj:
+      | Phaser.Types.Physics.Arcade.GameObjectWithBody
+      | Phaser.Tilemaps.Tile,
+    bulletObj:
+      | Phaser.Types.Physics.Arcade.GameObjectWithBody
+      | Phaser.Tilemaps.Tile,
   ): void {
     if (this.invincible || this.gameOver) return;
 
@@ -269,14 +330,19 @@ export class GameScene extends Phaser.Scene {
       blinkEvent.destroy();
     });
 
+    if (this.lives > 0) this.spawnHeartPickup();
     if (this.lives <= 0) {
       this.showGameOver();
     }
   }
 
   private onShipHitEnemy(
-    _shipObj: Phaser.Types.Physics.Arcade.GameObjectWithBody | Phaser.Tilemaps.Tile,
-    enemyObj: Phaser.Types.Physics.Arcade.GameObjectWithBody | Phaser.Tilemaps.Tile
+    _shipObj:
+      | Phaser.Types.Physics.Arcade.GameObjectWithBody
+      | Phaser.Tilemaps.Tile,
+    enemyObj:
+      | Phaser.Types.Physics.Arcade.GameObjectWithBody
+      | Phaser.Tilemaps.Tile,
   ): void {
     if (this.invincible || this.gameOver) return;
 
@@ -309,14 +375,19 @@ export class GameScene extends Phaser.Scene {
       blinkEvent.destroy();
     });
 
+    if (this.lives > 0) this.spawnHeartPickup();
     if (this.lives <= 0) {
       this.showGameOver();
     }
   }
 
   private onBulletHitAsteroid(
-    bulletObj: Phaser.Types.Physics.Arcade.GameObjectWithBody | Phaser.Tilemaps.Tile,
-    asteroidObj: Phaser.Types.Physics.Arcade.GameObjectWithBody | Phaser.Tilemaps.Tile
+    bulletObj:
+      | Phaser.Types.Physics.Arcade.GameObjectWithBody
+      | Phaser.Tilemaps.Tile,
+    asteroidObj:
+      | Phaser.Types.Physics.Arcade.GameObjectWithBody
+      | Phaser.Tilemaps.Tile,
   ): void {
     const bullet = bulletObj as Phaser.Physics.Arcade.Sprite;
     const asteroid = asteroidObj as Asteroid;
@@ -331,22 +402,29 @@ export class GameScene extends Phaser.Scene {
       this.scoreText.setText(`Score: ${this.score}`);
 
       // Explosion particles
-      this.add.particles(asteroid.x, asteroid.y, 'particle_explosion', {
-        speed: { min: 50, max: 200 },
-        scale: { start: 1, end: 0 },
-        alpha: { start: 1, end: 0 },
-        lifespan: 400,
-        quantity: 12,
-        tint: [0xff6633, 0xffaa33, 0xffdd66],
-        emitting: false,
-      }).explode(12);
+      this.add
+        .particles(asteroid.x, asteroid.y, "particle_explosion", {
+          speed: { min: 50, max: 200 },
+          scale: { start: 1, end: 0 },
+          alpha: { start: 1, end: 0 },
+          lifespan: 400,
+          quantity: 12,
+          tint: [0xff6633, 0xffaa33, 0xffdd66],
+          emitting: false,
+        })
+        .explode(12);
 
       // Split into smaller asteroids flying apart diagonally
       const splitSize = asteroid.getSplitSize();
       if (splitSize) {
         const directions = [-1, 1];
         for (const dir of directions) {
-          const child = new Asteroid(this, asteroid.x + dir * 12, asteroid.y, splitSize);
+          const child = new Asteroid(
+            this,
+            asteroid.x + dir * 12,
+            asteroid.y,
+            splitSize,
+          );
           this.asteroids.add(child);
           child.launch();
           child.setVelocityX(dir * Phaser.Math.Between(60, 130));
@@ -358,8 +436,12 @@ export class GameScene extends Phaser.Scene {
   }
 
   private onShipHitAsteroid(
-    shipObj: Phaser.Types.Physics.Arcade.GameObjectWithBody | Phaser.Tilemaps.Tile,
-    asteroidObj: Phaser.Types.Physics.Arcade.GameObjectWithBody | Phaser.Tilemaps.Tile
+    shipObj:
+      | Phaser.Types.Physics.Arcade.GameObjectWithBody
+      | Phaser.Tilemaps.Tile,
+    asteroidObj:
+      | Phaser.Types.Physics.Arcade.GameObjectWithBody
+      | Phaser.Tilemaps.Tile,
   ): void {
     if (this.invincible || this.gameOver) return;
 
@@ -372,6 +454,8 @@ export class GameScene extends Phaser.Scene {
     this.livesText.setText(`Lives: ${this.lives}`);
     this.ship.flash();
     screenShake(this.cameras.main, 0.015, 200);
+
+    if (this.lives > 0) this.spawnHeartPickup();
 
     // Brief invincibility
     this.invincible = true;
@@ -399,49 +483,98 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  private spawnHeartPickup(): void {
+    if (this.heartPickups.countActive() > 0) return;
+    const x = Phaser.Math.Between(60, 420);
+    const pickup = new HeartPickup(this, x, -20);
+    this.heartPickups.add(pickup);
+    pickup.launch();
+  }
+
+  private onShipCollectHeart(
+    _shipObj:
+      | Phaser.Types.Physics.Arcade.GameObjectWithBody
+      | Phaser.Tilemaps.Tile,
+    pickupObj:
+      | Phaser.Types.Physics.Arcade.GameObjectWithBody
+      | Phaser.Tilemaps.Tile,
+  ): void {
+    const pickup = pickupObj as HeartPickup;
+    if (!pickup.active) return;
+
+    pickup.destroy();
+    this.lives = Math.min(this.lives + 1, 3);
+    this.livesText.setText(`Lives: ${this.lives}`);
+  }
+
   private showPauseMenu(): void {
     this.paused = true;
 
-    const dim = this.add.rectangle(240, 400, 480, 800, 0x000000, 0.72)
-      .setDepth(150).setScrollFactor(0);
+    const dim = this.add
+      .rectangle(240, 400, 480, 800, 0x000000, 0.72)
+      .setDepth(150)
+      .setScrollFactor(0);
 
-    const title = this.add.text(240, 310, 'PAUSED', {
-      fontSize: '32px',
-      color: '#00ffff',
-      fontFamily: 'monospace',
-      fontStyle: 'bold',
-    }).setOrigin(0.5).setDepth(151).setScrollFactor(0);
+    const title = this.add
+      .text(240, 310, "PAUSED", {
+        fontSize: "32px",
+        color: "#00ffff",
+        fontFamily: "monospace",
+        fontStyle: "bold",
+      })
+      .setOrigin(0.5)
+      .setDepth(151)
+      .setScrollFactor(0);
 
-    const resumeBg = this.add.rectangle(240, 410, 220, 54, 0x1a6b1a)
-      .setDepth(151).setScrollFactor(0).setInteractive({ useHandCursor: true });
-    const resumeText = this.add.text(240, 410, 'Resume', {
-      fontSize: '18px',
-      color: '#ffffff',
-      fontFamily: 'monospace',
-    }).setOrigin(0.5).setDepth(152).setScrollFactor(0);
+    const resumeBg = this.add
+      .rectangle(240, 410, 220, 54, 0x1a6b1a)
+      .setDepth(151)
+      .setScrollFactor(0)
+      .setInteractive({ useHandCursor: true });
+    const resumeText = this.add
+      .text(240, 410, "Resume", {
+        fontSize: "18px",
+        color: "#ffffff",
+        fontFamily: "monospace",
+      })
+      .setOrigin(0.5)
+      .setDepth(152)
+      .setScrollFactor(0);
 
-    const quitBg = this.add.rectangle(240, 490, 220, 54, 0x444444)
-      .setDepth(151).setScrollFactor(0).setInteractive({ useHandCursor: true });
-    const quitText = this.add.text(240, 490, 'Quit to Menu', {
-      fontSize: '18px',
-      color: '#ffffff',
-      fontFamily: 'monospace',
-    }).setOrigin(0.5).setDepth(152).setScrollFactor(0);
+    const quitBg = this.add
+      .rectangle(240, 490, 220, 54, 0x444444)
+      .setDepth(151)
+      .setScrollFactor(0)
+      .setInteractive({ useHandCursor: true });
+    const quitText = this.add
+      .text(240, 490, "Quit to Menu", {
+        fontSize: "18px",
+        color: "#ffffff",
+        fontFamily: "monospace",
+      })
+      .setOrigin(0.5)
+      .setDepth(152)
+      .setScrollFactor(0);
 
-    resumeBg.on('pointerdown', () => this.hidePauseMenu());
-    resumeBg.on('pointerover', () => resumeBg.setAlpha(0.75));
-    resumeBg.on('pointerout', () => resumeBg.setAlpha(1));
+    resumeBg.on("pointerdown", () => this.hidePauseMenu());
+    resumeBg.on("pointerover", () => resumeBg.setAlpha(0.75));
+    resumeBg.on("pointerout", () => resumeBg.setAlpha(1));
 
-    quitBg.on('pointerdown', () => this.scene.start('MenuScene'));
-    quitBg.on('pointerover', () => quitBg.setAlpha(0.75));
-    quitBg.on('pointerout', () => quitBg.setAlpha(1));
+    quitBg.on("pointerdown", () => {
+      if (this.sessionId && this.sessionToken) {
+        abandonGameSession(this.sessionId, this.sessionToken);
+      }
+      this.scene.start("MenuScene");
+    });
+    quitBg.on("pointerover", () => quitBg.setAlpha(0.75));
+    quitBg.on("pointerout", () => quitBg.setAlpha(1));
 
     this.pauseOverlay = [dim, title, resumeBg, resumeText, quitBg, quitText];
   }
 
   private hidePauseMenu(): void {
     this.paused = false;
-    this.pauseOverlay.forEach(obj => obj.destroy());
+    this.pauseOverlay.forEach((obj) => obj.destroy());
     this.pauseOverlay = [];
   }
 
@@ -456,18 +589,24 @@ export class GameScene extends Phaser.Scene {
     const overlay = this.add.rectangle(240, 400, 480, 800, 0x000000, 0.6);
     overlay.setDepth(90);
 
-    this.add.text(240, 300, 'GAME OVER', {
-      fontSize: '40px',
-      color: '#ff4444',
-      fontFamily: 'monospace',
-      fontStyle: 'bold',
-    }).setOrigin(0.5).setDepth(100);
+    this.add
+      .text(240, 300, "GAME OVER", {
+        fontSize: "40px",
+        color: "#ff4444",
+        fontFamily: "monospace",
+        fontStyle: "bold",
+      })
+      .setOrigin(0.5)
+      .setDepth(100);
 
-    this.add.text(240, 370, `Score: ${this.score}`, {
-      fontSize: '28px',
-      color: '#ffffff',
-      fontFamily: 'monospace',
-    }).setOrigin(0.5).setDepth(100);
+    this.add
+      .text(240, 370, `Score: ${this.score}`, {
+        fontSize: "28px",
+        color: "#ffffff",
+        fontFamily: "monospace",
+      })
+      .setOrigin(0.5)
+      .setDepth(100);
 
     const finalScore = this.score;
 
@@ -475,18 +614,21 @@ export class GameScene extends Phaser.Scene {
     getSession().then((session) => {
       if (session) {
         // Logged in: auto-save
-        const savingText = this.add.text(240, 430, 'Saving score…', {
-          fontSize: '16px',
-          color: '#aaaaaa',
-          fontFamily: 'monospace',
-        }).setOrigin(0.5).setDepth(100);
+        const savingText = this.add
+          .text(240, 430, "Saving score…", {
+            fontSize: "16px",
+            color: "#aaaaaa",
+            fontFamily: "monospace",
+          })
+          .setOrigin(0.5)
+          .setDepth(100);
 
-        saveScore(finalScore)
+        saveScore(finalScore, this.sessionId, this.sessionToken)
           .then(() => {
-            savingText.setText('Score saved!').setColor('#44ff88');
+            savingText.setText("Score saved!").setColor("#44ff88");
           })
           .catch(() => {
-            savingText.setText('Save failed').setColor('#ff4444');
+            savingText.setText("Save failed").setColor("#ff4444");
           });
       } else {
         // Guest: show Save Score button
@@ -494,17 +636,25 @@ export class GameScene extends Phaser.Scene {
           .rectangle(240, 430, 200, 46, 0x0055aa)
           .setDepth(100)
           .setInteractive({ useHandCursor: true });
-        this.add.text(240, 430, 'Save Score', {
-          fontSize: '18px',
-          color: '#ffffff',
-          fontFamily: 'monospace',
-          fontStyle: 'bold',
-        }).setOrigin(0.5).setDepth(101);
-        saveBg.on('pointerdown', () => {
-          this.scene.start('LoginScene', { returnTo: 'game-over', score: finalScore });
+        this.add
+          .text(240, 430, "Save Score", {
+            fontSize: "18px",
+            color: "#ffffff",
+            fontFamily: "monospace",
+            fontStyle: "bold",
+          })
+          .setOrigin(0.5)
+          .setDepth(101);
+        saveBg.on("pointerdown", () => {
+          this.scene.start("LoginScene", {
+            returnTo: "game-over",
+            score: finalScore,
+            sessionId: this.sessionId,
+            sessionToken: this.sessionToken,
+          });
         });
-        saveBg.on('pointerover', () => saveBg.setAlpha(0.8));
-        saveBg.on('pointerout', () => saveBg.setAlpha(1));
+        saveBg.on("pointerover", () => saveBg.setAlpha(0.8));
+        saveBg.on("pointerout", () => saveBg.setAlpha(1));
       }
     });
 
@@ -513,20 +663,26 @@ export class GameScene extends Phaser.Scene {
       .rectangle(240, 500, 200, 46, 0x333333)
       .setDepth(100)
       .setInteractive({ useHandCursor: true });
-    this.add.text(240, 500, 'Main Menu', {
-      fontSize: '18px',
-      color: '#cccccc',
-      fontFamily: 'monospace',
-    }).setOrigin(0.5).setDepth(101);
-    menuBg.on('pointerdown', () => this.scene.start('MenuScene'));
-    menuBg.on('pointerover', () => menuBg.setAlpha(0.8));
-    menuBg.on('pointerout', () => menuBg.setAlpha(1));
+    this.add
+      .text(240, 500, "Main Menu", {
+        fontSize: "18px",
+        color: "#cccccc",
+        fontFamily: "monospace",
+      })
+      .setOrigin(0.5)
+      .setDepth(101);
+    menuBg.on("pointerdown", () => this.scene.start("MenuScene"));
+    menuBg.on("pointerover", () => menuBg.setAlpha(0.8));
+    menuBg.on("pointerout", () => menuBg.setAlpha(1));
 
-    const restartText = this.add.text(240, 570, 'Tap anywhere to restart', {
-      fontSize: '17px',
-      color: '#888888',
-      fontFamily: 'monospace',
-    }).setOrigin(0.5).setDepth(100);
+    const restartText = this.add
+      .text(240, 570, "Tap anywhere to restart", {
+        fontSize: "17px",
+        color: "#888888",
+        fontFamily: "monospace",
+      })
+      .setOrigin(0.5)
+      .setDepth(100);
 
     this.tweens.add({
       targets: restartText,
@@ -538,11 +694,17 @@ export class GameScene extends Phaser.Scene {
 
     // Wait a moment before allowing restart to prevent accidental taps
     this.time.delayedCall(800, () => {
-      this.input.on('pointerdown', (_pointer: Phaser.Input.Pointer, targets: Phaser.GameObjects.GameObject[]) => {
-        if (targets.length === 0) {
-          this.scene.restart();
-        }
-      });
+      this.input.on(
+        "pointerdown",
+        (
+          _pointer: Phaser.Input.Pointer,
+          targets: Phaser.GameObjects.GameObject[],
+        ) => {
+          if (targets.length === 0) {
+            this.scene.restart();
+          }
+        },
+      );
     });
   }
 }

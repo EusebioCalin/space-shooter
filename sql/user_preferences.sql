@@ -18,3 +18,24 @@ create policy "owner insert" on public.user_preferences
 
 create policy "owner update" on public.user_preferences
   for update using (auth.uid() = user_id);
+
+
+-- Game Session Table
+  -- create table public.game_sessions (
+  --   id          text primary key,
+  --   user_id     uuid references auth.users(id) on delete cascade,
+  --   started_at  timestamptz not null default now(),
+  --   used        boolean not null default false
+  -- );
+
+  create table public.game_sessions (
+    id          text primary key,
+    user_id     uuid references auth.users(id) on delete cascade,
+    started_at  timestamptz not null default now(),
+  );
+
+  alter table public.game_sessions enable row level security;
+
+  drop policy if exists "allow insert" on public.leaderboard;
+  drop policy if exists "allow update" on public.leaderboard;
+  -- Only allow inserting a new score if the session is valid and unused
